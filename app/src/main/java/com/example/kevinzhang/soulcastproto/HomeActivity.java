@@ -30,7 +30,6 @@ GoogleApiClient.OnConnectionFailedListener,
     private GoogleMap mMap;
     private GoogleApiClient mGoogleApiClient;
     private LocationRequest mLocationRequest;
-    private Location mLastLocation;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,6 +45,7 @@ GoogleApiClient.OnConnectionFailedListener,
     @Override
     protected void onPause() {
         super.onPause();
+        stopLocationUpdates();
 
         if (mGoogleApiClient != null){
             mGoogleApiClient.disconnect();
@@ -70,11 +70,13 @@ GoogleApiClient.OnConnectionFailedListener,
     }
 
     protected synchronized void buildGoogleAPIClient(){
-        mGoogleApiClient = new GoogleApiClient.Builder(this)
-            .addConnectionCallbacks(this)
-            .addOnConnectionFailedListener(this)
-            .addApi(LocationServices.API)
-            .build();
+        if (mGoogleApiClient == null) {
+            mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .addApi(LocationServices.API)
+                .build();
+        }
         mGoogleApiClient.connect();
     }
 
@@ -104,6 +106,10 @@ GoogleApiClient.OnConnectionFailedListener,
 
     }
 
+    protected void stopLocationUpdates(){
+        LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
+    }
+
     @Override
     public void onConnectionSuspended(int i) {
 
@@ -119,6 +125,8 @@ GoogleApiClient.OnConnectionFailedListener,
 
     }
 
+
+    //TODO onShowRationale, onPermissionDenied and onNeverShowAgain for all permissions
     @SuppressWarnings("all")
     @NeedsPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
     void setUpLocation(){
