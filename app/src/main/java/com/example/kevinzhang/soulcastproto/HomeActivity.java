@@ -45,9 +45,9 @@ GoogleApiClient.OnConnectionFailedListener,
     @Override
     protected void onPause() {
         super.onPause();
-        stopLocationUpdates();
 
         if (mGoogleApiClient != null){
+            stopLocationUpdates();
             mGoogleApiClient.disconnect();
         }
     }
