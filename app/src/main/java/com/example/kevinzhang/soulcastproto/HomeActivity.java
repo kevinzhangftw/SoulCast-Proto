@@ -1,6 +1,8 @@
 package com.example.kevinzhang.soulcastproto;
 
+import android.Manifest;
 import android.location.Location;
+import android.media.MediaRecorder;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -35,11 +37,19 @@ GoogleApiClient.OnConnectionFailedListener,
     private LocationRequest mLocationRequest;
 
     private Button mRecordButton;
+    private MediaRecorder mMediaRecorder;
+    private AudioRecorder mAudioRecorder;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
+
+        mMediaRecorder = new MediaRecorder();
+        mAudioRecorder = new AudioRecorder(mMediaRecorder);
+
+        HomeActivityPermissionsDispatcher.setUpAudioRecorderWithCheck(this);
+
         mRecordButton = (Button) findViewById(R.id.record_button);
         mRecordButton.setOnTouchListener(new View.OnTouchListener(){
             @Override
@@ -47,9 +57,11 @@ GoogleApiClient.OnConnectionFailedListener,
                 switch (motionEvent.getAction()){
                     case MotionEvent.ACTION_DOWN:
                         // User pressed down on the button
+                        mAudioRecorder.startRecording();
                         break;
                     case MotionEvent.ACTION_UP:
                         // User released the button
+                        mAudioRecorder.stopRecording();
                         break;
                 }
                 return false;
@@ -157,14 +169,8 @@ GoogleApiClient.OnConnectionFailedListener,
         }
     }
 
-    @NeedsPermission(android.Manifest.permission.RECORD_AUDIO)
+    @NeedsPermission({Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE})
     void setUpAudioRecorder(){
-
-    }
-
-    @NeedsPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
-    void setUpStorage(){
-
     }
 
     @OnPermissionDenied(android.Manifest.permission.ACCESS_FINE_LOCATION)
