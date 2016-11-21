@@ -1,15 +1,20 @@
 package com.example.kevinzhang.soulcastproto;
 
 import android.Manifest;
+import android.content.pm.PackageManager;
 import android.location.Location;
 import android.media.MediaRecorder;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
+import android.support.v4.content.ContextCompat;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
+import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -22,19 +27,18 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 
-import permissions.dispatcher.NeedsPermission;
-import permissions.dispatcher.OnPermissionDenied;
-import permissions.dispatcher.RuntimePermissions;
-
-@RuntimePermissions
 public class HomeActivity extends FragmentActivity implements OnMapReadyCallback,
-GoogleApiClient.ConnectionCallbacks,
-GoogleApiClient.OnConnectionFailedListener,
+    GoogleApiClient.ConnectionCallbacks,
+    GoogleApiClient.OnConnectionFailedListener,
     LocationListener {
+
+    private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
+    private final int AUDIO_AND_STORAGE_PERMISSION_REQUEST_CODE = 2;
 
     private GoogleMap mMap;
     private GoogleApiClient mGoogleApiClient;
     private LocationRequest mLocationRequest;
+    private Location mLastLocation;
 
     private Button mRecordButton;
     private MediaRecorder mMediaRecorder;
@@ -48,20 +52,38 @@ GoogleApiClient.OnConnectionFailedListener,
         mMediaRecorder = new MediaRecorder();
         mAudioRecorder = new AudioRecorder(mMediaRecorder);
 
-        HomeActivityPermissionsDispatcher.setUpAudioRecorderWithCheck(this);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            {
+                checkLocationPermission();
+            }
+        }
 
         mRecordButton = (Button) findViewById(R.id.record_button);
-        mRecordButton.setOnTouchListener(new View.OnTouchListener(){
+        mRecordButton.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
-                switch (motionEvent.getAction()){
+                switch (motionEvent.getAction()) {
                     case MotionEvent.ACTION_DOWN:
                         // User pressed down on the button
-                        mAudioRecorder.startRecording();
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            {
+                                checkAudioAndStoragePermission();
+                                if ((ContextCompat.checkSelfPermission(HomeActivity.this, Manifest.permission.RECORD_AUDIO)
+                                    == PackageManager.PERMISSION_GRANTED) && (ContextCompat.checkSelfPermission(HomeActivity.this,
+                                    Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED)){
+                                    mAudioRecorder.startRecording();
+                                }
+                            }
+                        } else {
+                            mAudioRecorder.startRecording();
+                        }
+
                         break;
                     case MotionEvent.ACTION_UP:
                         // User released the button
-                        mAudioRecorder.stopRecording();
+                        if (mAudioRecorder.mHasAudioRecordingBeenStarted) {
+                            mAudioRecorder.stopRecording();
+                        }
                         break;
                 }
                 return false;
@@ -79,8 +101,15 @@ GoogleApiClient.OnConnectionFailedListener,
     protected void onPause() {
         super.onPause();
 
-        if (mGoogleApiClient != null){
-            stopLocationUpdates();
+        if (mGoogleApiClient != null && mGoogleApiClient.isConnected()) {
+            LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (mGoogleApiClient != null) {
             mGoogleApiClient.disconnect();
         }
     }
@@ -97,12 +126,21 @@ GoogleApiClient.OnConnectionFailedListener,
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
-        if (mMap != null){
-            HomeActivityPermissionsDispatcher.setUpLocationWithCheck(this);
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            //user is on SDK > 23
+            if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+                buildGoogleAPIClient();
+                mMap.setMyLocationEnabled(true);
+            }
+        } else {
+            buildGoogleAPIClient();
+            mMap.setMyLocationEnabled(true);
         }
     }
 
-    protected synchronized void buildGoogleAPIClient(){
+    protected synchronized void buildGoogleAPIClient() {
         if (mGoogleApiClient == null) {
             mGoogleApiClient = new GoogleApiClient.Builder(this)
                 .addConnectionCallbacks(this)
@@ -113,35 +151,11 @@ GoogleApiClient.OnConnectionFailedListener,
         mGoogleApiClient.connect();
     }
 
-    @SuppressWarnings("all")
     @Override
     public void onConnected(@Nullable Bundle bundle) {
-        Location location = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
-        if (location != null){
-            LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
-
-            //move map camera
-            mMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
-            mMap.animateCamera(CameraUpdateFactory.zoomTo(11));
-        }
-
-        startLocationUpdates();
-
+        requestLocationUpdates();
     }
 
-    @SuppressWarnings("all")
-    protected void startLocationUpdates(){
-        mLocationRequest = new LocationRequest();
-        mLocationRequest.setInterval(1000);
-        mLocationRequest.setFastestInterval(1000);
-        mLocationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
-        LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
-
-    }
-
-    protected void stopLocationUpdates(){
-        LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
-    }
 
     @Override
     public void onConnectionSuspended(int i) {
@@ -155,37 +169,83 @@ GoogleApiClient.OnConnectionFailedListener,
 
     @Override
     public void onLocationChanged(Location location) {
+        mLastLocation = location;
+        LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
 
-    }
+        //move map camera
+        mMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
+        mMap.animateCamera(CameraUpdateFactory.zoomTo(11));
 
-
-    //TODO onShowRationale, onPermissionDenied and onNeverShowAgain for all permissions
-    @SuppressWarnings("all")
-    @NeedsPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
-    void setUpLocation(){
-        if (mMap != null){
-            mMap.setMyLocationEnabled(true);
-            buildGoogleAPIClient();
+        //stop location updates
+        if (mGoogleApiClient != null) {
+            LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
         }
     }
 
-    @NeedsPermission({Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE})
-    void setUpAudioRecorder(){
+    private void requestLocationUpdates(){
+        mLocationRequest = new LocationRequest();
+        mLocationRequest.setInterval(1000);
+        mLocationRequest.setFastestInterval(1000);
+        mLocationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+        if (ContextCompat.checkSelfPermission(this,
+            Manifest.permission.ACCESS_FINE_LOCATION)
+            == PackageManager.PERMISSION_GRANTED) {
+            LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
+        }
     }
 
-    @OnPermissionDenied(android.Manifest.permission.ACCESS_FINE_LOCATION)
-    void showLocationPermissionDenied(){
-
+    private void checkLocationPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                LOCATION_PERMISSION_REQUEST_CODE);
+        }
     }
 
-    @OnPermissionDenied(android.Manifest.permission.RECORD_AUDIO)
-    void showAudioPermissionDenied(){
-
+    private void checkAudioAndStoragePermission() {
+        if ((ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+        != PackageManager.PERMISSION_GRANTED) &&
+            (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            != PackageManager.PERMISSION_GRANTED)){
+            ActivityCompat.requestPermissions(this,
+                new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                AUDIO_AND_STORAGE_PERMISSION_REQUEST_CODE);
+        }
     }
 
-    @OnPermissionDenied(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
-    void showStoragePermissionDenied(){
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case LOCATION_PERMISSION_REQUEST_CODE: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
 
+                    // permission was granted
+                    if (ContextCompat.checkSelfPermission(this,
+                        Manifest.permission.ACCESS_FINE_LOCATION)
+                        == PackageManager.PERMISSION_GRANTED) {
+
+                        if (mGoogleApiClient == null) {
+                            buildGoogleAPIClient();
+                        }
+                        mMap.setMyLocationEnabled(true);
+                    }
+
+                } else {
+
+                    // Permission denied, Disable the functionality that depends on this permission.
+                    Toast.makeText(this, "Location permission denied", Toast.LENGTH_LONG).show();
+                }
+            }
+
+            // other cases to check for other permissions this app might request.
+        }
     }
+
+
+
 }
 

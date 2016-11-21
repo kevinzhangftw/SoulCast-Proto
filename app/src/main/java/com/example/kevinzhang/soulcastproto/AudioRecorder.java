@@ -11,13 +11,21 @@ public class AudioRecorder {
     private static MediaRecorder mMediaRecorder;
     private static File mAudioFile = new File(Environment.getExternalStorageDirectory().getAbsolutePath(),
         "audio_test.mp4");
+    public boolean mHasAudioRecordingBeenStarted = false;
 
     public AudioRecorder(MediaRecorder mediaRecorder){
         mMediaRecorder = mediaRecorder;
     }
 
     public void startRecording(){
-        setRecorder();
+        try{
+            setRecorder();
+            mMediaRecorder.prepare();
+            mMediaRecorder.start();
+            mHasAudioRecordingBeenStarted = true;
+        } catch (IOException e){
+            e.printStackTrace();
+        }
     }
 
     public void stopRecording(){
@@ -27,7 +35,7 @@ public class AudioRecorder {
 
         }
         mMediaRecorder.reset();
-        mMediaRecorder.release();
+        mHasAudioRecordingBeenStarted = false;
     }
 
     public void startPlaying(){
@@ -41,15 +49,9 @@ public class AudioRecorder {
     private void setRecorder(){
         mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
         mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-        mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
-
+        mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+        mMediaRecorder.setAudioSamplingRate(44100);
+        mMediaRecorder.setAudioEncodingBitRate(96000);
         mMediaRecorder.setOutputFile(mAudioFile.getAbsolutePath());
-        try{
-            mMediaRecorder.prepare();
-            mMediaRecorder.start();
-        } catch (IOException e){
-            e.printStackTrace();
-        }
-
     }
 }
