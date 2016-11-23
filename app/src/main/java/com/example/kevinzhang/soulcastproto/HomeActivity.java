@@ -49,8 +49,7 @@ public class HomeActivity extends FragmentActivity implements OnMapReadyCallback
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
 
-        mMediaRecorder = new MediaRecorder();
-        mAudioRecorder = new AudioRecorder(mMediaRecorder);
+        mAudioRecorder = new AudioRecorder();
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             {
