@@ -16,11 +16,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
-import com.amazonaws.auth.CognitoCachingCredentialsProvider;
 import com.amazonaws.mobileconnectors.s3.transferutility.TransferUtility;
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3Client;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationListener;
@@ -50,30 +46,23 @@ public class HomeActivity extends FragmentActivity implements OnMapReadyCallback
     private Button mRecordButton;
     private MediaRecorder mMediaRecorder;
     private AudioRecorder mAudioRecorder;
-    private AudioUploader mAudioUploader;
+
+    private TransferUtility mTransferUtility;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
 
-        CognitoCachingCredentialsProvider credentialsProvider = new CognitoCachingCredentialsProvider(
-            getApplicationContext(),    /* get the context for the application */
-            "us-west-2:b7fd47db-88cb-429e-9eb0-45e508d7baba",    /* Identity Pool ID */
-            Regions.US_WEST_2           /* Region for your identity pool--US_EAST_1 or EU_WEST_1*/
-        );
+        mTransferUtility = Util.getTransferUtility(this);
 
-        AmazonS3 s3 = new AmazonS3Client(credentialsProvider);
-        final TransferUtility transferUtility = new TransferUtility(s3, getApplicationContext());
-
-        final AudioUploader mAudioUploader = new AudioUploader(transferUtility);
 
         mAudioRecorder = new AudioRecorder();
         mAudioRecorder.setmAudioRecorderListener(new AudioRecorder.AudioRecorderListener() {
             @Override
             public void onRecordingFinished(File audioFile) {
                 //TODO Upload to S3
-                mAudioUploader.upload(audioFile);
+              beginUpload(audioFile);
             }
         });
 
@@ -216,6 +205,10 @@ public class HomeActivity extends FragmentActivity implements OnMapReadyCallback
             == PackageManager.PERMISSION_GRANTED) {
             LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
         }
+    }
+
+    private void beginUpload(File audioFile){
+      mTransferUtility.upload(Constants.BUCKET_NAME, audioFile.getName(), audioFile);
     }
 
     private void checkLocationPermission() {
