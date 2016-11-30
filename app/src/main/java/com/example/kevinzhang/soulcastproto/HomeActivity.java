@@ -16,6 +16,11 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
+import com.amazonaws.auth.CognitoCachingCredentialsProvider;
+import com.amazonaws.mobileconnectors.s3.transferutility.TransferUtility;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3Client;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationListener;
@@ -26,6 +31,8 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
+
+import java.io.File;
 
 public class HomeActivity extends FragmentActivity implements OnMapReadyCallback,
     GoogleApiClient.ConnectionCallbacks,
@@ -43,13 +50,32 @@ public class HomeActivity extends FragmentActivity implements OnMapReadyCallback
     private Button mRecordButton;
     private MediaRecorder mMediaRecorder;
     private AudioRecorder mAudioRecorder;
+    private AudioUploader mAudioUploader;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
 
+        CognitoCachingCredentialsProvider credentialsProvider = new CognitoCachingCredentialsProvider(
+            getApplicationContext(),    /* get the context for the application */
+            "us-west-2:b7fd47db-88cb-429e-9eb0-45e508d7baba",    /* Identity Pool ID */
+            Regions.US_WEST_2           /* Region for your identity pool--US_EAST_1 or EU_WEST_1*/
+        );
+
+        AmazonS3 s3 = new AmazonS3Client(credentialsProvider);
+        final TransferUtility transferUtility = new TransferUtility(s3, getApplicationContext());
+
+        final AudioUploader mAudioUploader = new AudioUploader(transferUtility);
+
         mAudioRecorder = new AudioRecorder();
+        mAudioRecorder.setmAudioRecorderListener(new AudioRecorder.AudioRecorderListener() {
+            @Override
+            public void onRecordingFinished(File audioFile) {
+                //TODO Upload to S3
+                mAudioUploader.upload(audioFile);
+            }
+        });
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             {
@@ -93,7 +119,6 @@ public class HomeActivity extends FragmentActivity implements OnMapReadyCallback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
             .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
-
     }
 
     @Override
