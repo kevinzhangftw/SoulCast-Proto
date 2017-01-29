@@ -16,6 +16,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
+import com.amazonaws.mobileconnectors.s3.transferutility.TransferUtility;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationListener;
@@ -26,6 +27,8 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
+
+import java.io.File;
 
 public class HomeActivity extends FragmentActivity implements OnMapReadyCallback,
     GoogleApiClient.ConnectionCallbacks,
@@ -44,12 +47,24 @@ public class HomeActivity extends FragmentActivity implements OnMapReadyCallback
     private MediaRecorder mMediaRecorder;
     private AudioRecorder mAudioRecorder;
 
+    private TransferUtility mTransferUtility;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
 
+        mTransferUtility = Util.getTransferUtility(this);
+
+
         mAudioRecorder = new AudioRecorder();
+        mAudioRecorder.setmAudioRecorderListener(new AudioRecorder.AudioRecorderListener() {
+            @Override
+            public void onRecordingFinished(File audioFile) {
+                //TODO Upload to S3
+              beginUpload(audioFile);
+            }
+        });
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             {
@@ -93,7 +108,6 @@ public class HomeActivity extends FragmentActivity implements OnMapReadyCallback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
             .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
-
     }
 
     @Override
@@ -191,6 +205,10 @@ public class HomeActivity extends FragmentActivity implements OnMapReadyCallback
             == PackageManager.PERMISSION_GRANTED) {
             LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
         }
+    }
+
+    private void beginUpload(File audioFile){
+      mTransferUtility.upload(Constants.BUCKET_NAME, audioFile.getName(), audioFile);
     }
 
     private void checkLocationPermission() {
